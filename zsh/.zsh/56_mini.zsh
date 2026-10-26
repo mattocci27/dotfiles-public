@@ -269,6 +269,44 @@ push-vault-backup() {
     "$dst"
 }
 
+push-radiko-backup() {
+  local ans stamp src dst history
+  src="$THUNDER_ROOT/3-Resources/Media/radiko/"
+  dst="$VAULT_BACKUP/3-Resources/Media/radiko/"
+
+  if [[ ! -d "$src" ]]; then
+    echo "❌ Source not found: $src"
+    return 1
+  fi
+
+  if [[ ! -d "$VAULT_ROOT" ]]; then
+    echo "❌ Vault is not mounted: $VAULT_ROOT"
+    return 1
+  fi
+
+  mkdir -p "$dst"
+
+  stamp=$(date "+%Y%m%d-%H%M%S")
+  history="$VAULT_ROOT/Backup-History/radiko/$stamp"
+  vault-rsync-build-opts "$stamp"
+  VAULT_RSYNC_OPTS+=(--backup "--backup-dir=$history")
+
+  echo "🔍 DRY RUN (ThunderDrive/radiko → Vault/Backup/radiko)"
+  rsync "${VAULT_RSYNC_OPTS[@]}" --dry-run \
+    "$src" \
+    "$dst" || return 1
+
+  echo
+  read "ans?🚀 Execute radiko backup sync? (y/N): "
+  [[ "$ans" != "y" ]] && echo "❌ Cancelled" && return 0
+
+  mkdir -p "$history"
+  echo "🚀 EXECUTE (ThunderDrive/radiko → Vault/Backup/radiko)"
+  rsync "${VAULT_RSYNC_OPTS[@]}" \
+    "$src" \
+    "$dst"
+}
+
 pull-vault-backup() {
   local ans stamp
   local src="$VAULT_BACKUP/"
