@@ -1,79 +1,79 @@
-# Dotfiles
+# Dotfiles for Linux containers
 
-This repository contains configuration files for R, Visual Studio Code, Zed, tmux, Neovim (LazyVim), Zsh, Alacritty, and Radian. It also includes Cousine Nerd Fonts.
+Configuration for Zsh, Neovim, Git, R, and radian inside Docker containers.
 
-# Requirement
+## Contents
 
-- Command Line Tools for Xcode
+- `zsh/`: History, completion, vi keybindings, prompt, and basic aliases
+- `nvim/`: LazyVim configuration with R and Quarto support
+- `git/`: Git settings, aliases, and global ignore rules
+- `R/`: CRAN settings and Linux `~/.R/Makevars`
+- `radian/`: R console appearance and editing settings
+- `install.sh`: Configuration symlinks managed with GNU Stow
 
-```shell
-# command line tools
-sudo xcode-select --install
+## Installation
+
+Install `stow`, `zsh`, `git`, `nvim`, and R in the container first.
+Use a Neovim version supported by the current LazyVim release.
+Building R packages from source also requires GCC/G++, make, and the relevant development libraries.
+`install.sh` only creates configuration symlinks; install software and R packages separately.
+
+```sh
+cd /path/to/dotfiles-public
+sh install.sh
+exec zsh
 ```
 
-# Usage
+Clone or copy the repository anywhere, and keep it at that location after installation because the symlinks point to it.
+In a Dockerfile, run the installer with `HOME` set to the home directory of the user who will use the configuration.
 
-To set up your environment, clone this repository, install dependencies, and create symbolic links:
-
-```shell
-# Clone the repository
-git clone https://github.com/mattocci27/dotfiles.git ~/dotfiles
-
-# Navigate to the dotfiles directory
-cd ~/dotfiles
-
-# Install dependencies and create symbolic links
-sh setup.sh
+```dockerfile
+# Run after installing dependencies and switching to the intended user.
+COPY --chown=1000:1000 . /opt/dotfiles
+RUN sh /opt/dotfiles/install.sh
+CMD ["zsh"]
 ```
 
-# Directory Structure
+Replace `1000:1000` with the intended user's UID and GID.
+If a volume mount replaces the home directory, run `install.sh` after mounting it.
+The installer stops if existing files conflict. Back up or move those files before trying again.
+You can rerun the installer. Its package list is fixed to `zsh nvim git R radian`.
 
-- **alacritty/**: Terminal emulator configuration
-- **Code/**: VS Code settings and user preferences
-- **deps/**: Dependency files (Brewfile, platform-specific install scripts)
-- **fonts/**: Cousine Nerd Fonts
-- **git/**: Git configuration and aliases
-- **nvim/**: Neovim configuration (LazyVim)
-- **R/**: R environment configuration and Makevars
-- **radian/**: Enhanced R console configuration
-- **scripts/**: Stow deployment and utility scripts
-- **tmux/**: Terminal multiplexer configuration
-- **zed/**: Zed settings, native Vim keymap, tasks, and Markdown snippets
-- **zsh/**: Zsh shell configuration and aliases
+## Zsh
 
-# Zed
+On first startup, Zsh downloads Zinit and loads completion, autosuggestions, syntax highlighting, vi mode, and the Pure prompt.
+The plugins are `zsh-completions`, `zsh-autosuggestions`, `fast-syntax-highlighting`, `zsh-vi-mode`, and `pure`.
+The initial download requires Git and network access. If Zinit cannot be downloaded, the shell uses built-in completion and a fallback prompt.
+Run `ZSH_SKIP_PLUGINS=1 zsh` to skip plugin downloads and loading.
+Press `jj` to leave insert mode.
 
-On macOS, the Brew bundle installs Zed; the `zed/` package is stowed to `~/.config/zed` by the existing deployment scripts. It uses Zed's native Vim mode with `Space` as the normal-mode leader and native which-key with no display delay; standalone Neovim remains independent.
+The following integrations are enabled when their tools are installed:
 
-Zed auto-installs the `R`, `Air`, `Quarto`, and `Gruvbox Material` extensions. R uses Air for formatting and `r_language_server` for language intelligence; setup option 6 installs the required `languageserver` and `lintr` R packages. `SPC t r` starts the existing `radian` command in a Zed terminal.
+- `fzf`: `Ctrl-R` searches history; `Ctrl-X` selects a recent directory. `fp` selects a file, `vf` opens the selected file in Neovim, and `ff` searches directories.
+- `ghq` + `fzf`: `Ctrl-G` selects a repository to navigate to.
+- `zoxide`: `z` navigates directories. With `fzf`, `Ctrl-F` selects a destination.
+- `eza`: Provides enhanced `ls` aliases.
+- `batcat`: Available through the `bat` alias.
+- `ripgrep`: Provides file discovery for fzf and search support for Neovim.
 
-`.qmd` uses the young, grammar-only Quarto extension (currently `0.0.1`); `.Rmd` and `.rmd` use Markdown. Fenced R code is highlighted when the R extension is installed, and global tasks provide Quarto preview/render plus R Markdown render (`SPC q`). Zed does not provide Quarto's full notebook/chunk execution workflow. The bundled snippets are scoped separately for Quarto and Markdown.
+## Neovim / R
 
-GitHub Copilot is selected as the edit-prediction provider. Predictions are disabled for ordinary Markdown (including `.Rmd`), YAML, and text files while remaining enabled for `.qmd` and programming languages. Sign in to GitHub from Zed when prompted.
+Neovim needs network access on first startup to download plugins.
+Quarto configuration is included; install Quarto separately to render documents.
+Install the R package `languageserver` to use an R language server.
+To use radian, install `radian` separately in your Python environment.
 
-Remote SSH and Dev Containers use Zed's native remote project flow. No VS Code Remote settings are copied; Zed reads SSH configuration through the system `ssh` command, and Dev Containers use each project's existing `.devcontainer/devcontainer.json`.
+`~/.R/Makevars` selects `g++` as the C++14 compiler and enables CPU-specific optimizations.
+Review these flags before moving compiled packages to a different CPU.
 
-# Platform Support
+## Git
 
-Supports macOS (Darwin) and Ubuntu with platform-specific dependency scripts.
+Configure your own Git name and email in the container or individual projects.
+For example, run these commands inside a Git repository to set a project-specific identity:
 
-# Sync Excludes
+```sh
+git config --local user.name "Your Name"
+git config --local user.email "you@example.com"
+```
 
-- `scripts/.sync/mini-rsync.excludes`: exclude list for `push-mini` / `pull-mini` / `push-ms` / `pull-ms`
-- `scripts/.sync/air-archives.include`: allowlist for `pull-mini-archives` subset sync from `mini/4-Archives` to `Air/4-Archives`
-- `scripts/.sync/vault-rsync.excludes`: exclude list for `push-vault-backup` / `pull-vault-backup`
-- `scripts/.sync/gdrive-rclone.excludes`: exclude list for `gdrive-*` commands
-
-# Homebrew
-
-Homebrew mirror at [tsinghua uni](https://mirror.tuna.tsinghua.edu.cn/help/homebrew/)
-
-# SSH Configuration (private)
-
-- <https://github.com/mattocci27/dotssh>
-
-# Zotero
-
-- <https://github.com/retorquere/zotero-better-bibtex>
-
-- <https://github.com/jlegewie/zotfile>
+Some interactive Git aliases require `fzf`.

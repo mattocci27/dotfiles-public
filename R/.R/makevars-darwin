@@ -1,3 +1,0 @@
-FC  = /opt/homebrew/bin/gfortran
-F77 = /opt/homebrew/bin/gfortran
-FLIBS = -L/opt/homebrew/opt/gcc/lib/gcc/current -lgfortran -lquadmath

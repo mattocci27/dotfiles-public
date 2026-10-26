@@ -1,8 +1,0 @@
-# Exclude .DS_Store on both sides so delete+backup does not choke on macOS Unicode paths.
-- .DS_Store
-- .rsync-trash/
-- .DocumentRevisions-V100/
-- .TemporaryItems/
-- .Spotlight-V100/
-- .Trashes/
-- .fseventsd/

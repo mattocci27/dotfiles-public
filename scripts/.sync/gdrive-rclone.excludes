@@ -1,9 +1,0 @@
-.DS_Store
-Docs/**
-Shared/**
-tmp/**
-**/renv/**
-**/.git/**
-**/.Rproj.user/**
-**/*.tmp
-**/.rsync-trash/**

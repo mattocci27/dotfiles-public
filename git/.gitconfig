@@ -1,14 +1,3 @@
-[user]
-    name = Masatoshi Katabuchi
-    email = mattocci27@gmail.com
-    signingKey = ""
-
-[filter "lfs"]
-    clean = git-lfs clean -- %f
-    smudge = git-lfs smudge -- %f
-    required = true
-    process = git-lfs filter-process
-
 [core]
     editor = vi ; Ensure vi is your preferred editor
     excludesfile = $HOME/.gitignore_global
@@ -82,11 +71,3 @@
 
 [tag]
     forceSignAnnotated = false
-
-[difftool "sourcetree"]
-    cmd = opendiff "$LOCAL" "$REMOTE"
-    path =
-
-[mergetool "sourcetree"]
-    cmd = /Applications/Sourcetree.app/Contents/Resources/opendiff-w.sh "$LOCAL" "$REMOTE" -ancestor "$BASE" -merge "$MERGED"
-    trustExitCode = true

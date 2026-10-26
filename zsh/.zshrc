@@ -1,65 +1,52 @@
-# Load secrets first when present, then the remaining zsh fragments in lexical order.
-DOTFILES_ROOT="${DOTFILES_ROOT:-$HOME/dotfiles}"
-if [[ -f "$DOTFILES_ROOT/zsh/.zsh/99_secrets.zsh" ]]; then
-  source "$DOTFILES_ROOT/zsh/.zsh/99_secrets.zsh"
-fi
-for file in "$DOTFILES_ROOT/zsh/.zsh/"*.zsh(.N); do
-  [[ "$file" == "$DOTFILES_ROOT/zsh/.zsh/99_secrets.zsh" ]] && continue
+# Resolve the repository through the Stow symlink.
+DOTFILES_ROOT="${${(%):-%N}:A:h:h}"
+for file in "$DOTFILES_ROOT/zsh/.zsh/"*.zsh(N); do
   source "$file"
 done
 
-# Zinit installation check
-if [[ ! -f $HOME/.local/share/zinit/zinit.git/zinit.zsh ]]; then
-    print -P "%F{33} %F{220}Installing %F{33}ZDHARMA-CONTINUUM%F{220} Initiative Plugin Manager (%F{33}zdharma-continuum/zinit%F{220})…%f"
-    command mkdir -p "$HOME/.local/share/zinit" && command chmod g-rwX "$HOME/.local/share/zinit"
-    command git clone https://github.com/zdharma-continuum/zinit "$HOME/.local/share/zinit/zinit.git" && \
-        print -P "%F{33} %F{34}Installation successful.%f%b" || \
-        print -P "%F{160} The clone has failed.%f%b"
-fi
-
-source "$HOME/.local/share/zinit/zinit.git/zinit.zsh"
-# zinit self-update
-autoload -Uz _zinit
-(( ${+_comps} )) && _comps[zinit]=_zinit
-
-# Load annexes without Turbo
-zinit light-mode for \
-    zdharma-continuum/zinit-annex-as-monitor \
-    zdharma-continuum/zinit-annex-bin-gem-node \
-    zdharma-continuum/zinit-annex-patch-dl \
-    zdharma-continuum/zinit-annex-rust
-
-# Plugin installations
-zinit light zsh-users/zsh-autosuggestions
-zinit light zdharma-continuum/fast-syntax-highlighting
-zinit light zsh-users/zsh-completions
-
-# Must come before loading plugin
-ZVM_VI_INSERT_ESCAPE_BINDKEY=jj
-# Use Zsh's stable line editor; the default NEX engine can redraw
-# characters incorrectly in macOS SSH sessions.
-ZVM_READKEY_ENGINE=zle
-zinit light jeffreytse/zsh-vi-mode
-
-# Pure theme and settings
-PURE_CMD_MAX_EXEC_TIME=10
-zinit ice pick"async.zsh" src"pure.zsh" # Pure theme async loading
-zinit light sindresorhus/pure
-
-# Zoxide initialization
-eval "$(zoxide init zsh)"
-
-# Keybindings — run after zsh-vi-mode initializes
+# Keep a usable shell even when plugin installation is unavailable.
+autoload -Uz compinit promptinit
+bindkey -v
+bindkey -M viins 'jj' vi-cmd-mode
 zvm_after_init() {
-  bindkey '^R' fzf-history-widget
-  bindkey '^t' fzf-tmux
-  bindkey '^g' fzf-src
-  bindkey '^x' fzf-cdr
-  bindkey '^f' fzf-z-search
+  if command -v fzf >/dev/null 2>&1; then
+    bindkey -M viins '^R' fzf-history-widget
+    bindkey -M viins '^x' fzf-cdr
+    command -v ghq >/dev/null 2>&1 && bindkey -M viins '^g' fzf-src
+    command -v zoxide >/dev/null 2>&1 && bindkey -M viins '^f' fzf-z-search
+  fi
+  return 0
 }
 
-# Added by flyctl installer
-export FLYCTL_INSTALL="$HOME/.fly"
-export PATH="$FLYCTL_INSTALL/bin:$PATH"
+ZINIT_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/zinit/zinit.git"
+if [[ ${ZSH_SKIP_PLUGINS:-0} != 1 ]]; then
+  if [[ ! -f "$ZINIT_HOME/zinit.zsh" ]] && command -v git >/dev/null 2>&1; then
+    if command mkdir -p "${ZINIT_HOME:h}"; then
+      command git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME" ||
+        print -u2 'Zinit installation failed; using built-in Zsh configuration.'
+    fi
+  fi
+fi
 
-. "$HOME/.cargo/env"
+if [[ ${ZSH_SKIP_PLUGINS:-0} != 1 && -f "$ZINIT_HOME/zinit.zsh" ]]; then
+  source "$ZINIT_HOME/zinit.zsh"
+  zinit light zsh-users/zsh-completions
+  compinit
+  zinit light zsh-users/zsh-autosuggestions
+  ZVM_VI_INSERT_ESCAPE_BINDKEY=jj
+  ZVM_READKEY_ENGINE=zle
+  zinit light jeffreytse/zsh-vi-mode
+  PURE_CMD_MAX_EXEC_TIME=10
+  zinit ice pick"async.zsh" src"pure.zsh"
+  zinit light sindresorhus/pure
+  zinit light zdharma-continuum/fast-syntax-highlighting
+else
+  compinit
+  promptinit
+  prompt walters
+fi
+zvm_after_init
+
+if command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init zsh)"
+fi

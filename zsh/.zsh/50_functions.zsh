@@ -1,143 +1,66 @@
-# Check for command availability
-command_exists() {
-  command -v "$1" &>/dev/null
-}
-
-ghq_repo_paths() {
-  ghq list -p
-}
-
-
-# Enable recent-directory widgets used by fzf-cdr.
+# Track recently visited directories for cdr and fuzzy navigation.
 autoload -Uz add-zsh-hook chpwd_recent_dirs cdr
 add-zsh-hook chpwd chpwd_recent_dirs
 
-# Enhance shell history search with fzf
-fzf-history-widget() {
-  local tac_command=$(command_exists tac && echo "tac" || echo "tail -r")
-  BUFFER=$( ([ -n "$ZSH_NAME" ] && fc -l 1 || history) | sed 's/ *[0-9]* *//' | eval $tac_command | awk '!a[$0]++' | fzf --tiebreak=index --query="$LBUFFER" +s)
-  CURSOR=$#BUFFER
-  zle reset-prompt
-}
-zle -N fzf-history-widget
-bindkey '^R' fzf-history-widget
+if command -v fzf >/dev/null 2>&1; then
+  export FZF_DEFAULT_OPTS='--height 40% --reverse --border'
+  if command -v rg >/dev/null 2>&1; then
+    export FZF_DEFAULT_COMMAND='rg --files --hidden --glob "!.git"'
+  fi
 
-# Navigate directories using cdr and fzf
-fzf-get-destination-from-cdr() {
-  autoload -Uz chpwd_recent_dirs cdr
-  cdr -l | sed -e 's/^[[:digit:]]*[[:blank:]]*//' | awk '{c=gsub("/","/"); print c,length($0),$0}' | sort -n | cut -d' ' -f1- | fzf --query="$LBUFFER" --height 40% --reverse
-}
-
-fzf-cdr() {
-  autoload -Uz chpwd_recent_dirs cdr
-  local destination="$(fzf-get-destination-from-cdr)"
-  if [ -n "$destination" ]; then
-    BUFFER="cd '$destination'"
-    zle accept-line
-  else
+  fzf-history-widget() {
+    local selected
+    selected=$(fc -rl 1 | sed 's/^[[:space:]]*[0-9]*[[:space:]]*//' | awk '!seen[$0]++' | fzf --query="$LBUFFER" --tiebreak=index +s) || return
+    BUFFER="$selected"
+    CURSOR=${#BUFFER}
     zle reset-prompt
-  fi
-}
-zle -N fzf-cdr
-bindkey '^x' fzf-cdr
+  }
+  zle -N fzf-history-widget
 
-# Attach to tmux sessions using fzf
-fzf-tmux() {
-  if command_exists tmux; then
-    local session
-    session=$(tmux list-sessions | fzf | awk -F':' '{print $1}')
-    if [ -n "$session" ]; then
-      _cool-fzf-insert-command-line "tmux attach -t $session"
-    fi
-  else
-    echo "tmux not found."
-  fi
-}
-zle -N fzf-tmux
-bindkey '^t' fzf-tmux
-
-# Navigate to repositories using ghq and fzf
-fzf-src() {
-  local dir
-  local entries
-  entries=$(ghq_repo_paths)
-  if [ -z "$entries" ]; then
-    zle -M "ghq repositories not found"
-    zle reset-prompt
-    return
-  fi
-
-  dir=$(print -r -- "$entries" | fzf --query="$LBUFFER" --height 40% --reverse)
-  if [ -n "$dir" ]; then
-    BUFFER="cd '$dir'"
+  fzf-cdr() {
+    local destination
+    destination=$(cdr -l | sed 's/^[[:space:]]*[0-9]*[[:space:]]*//' | fzf --query="$LBUFFER") || return
+    [[ -n "$destination" ]] || return
+    # cdr abbreviates paths with ~; expand it without evaluating shell input.
+    [[ "$destination" == '~' || "$destination" == '~/'* ]] && destination="$HOME${destination:1}"
+    BUFFER="cd -- ${(q)destination}"
     zle accept-line
-  fi
-  zle clear-screen
-}
-zle -N fzf-src
-bindkey '^g' fzf-src
+  }
+  zle -N fzf-cdr
 
-# Utility function to insert a command into the Zsh command line and execute it
-_cool-fzf-insert-command-line() {
-  # Check if we are in an interactive shell
-  if [[ $- == *i* ]]; then
-    BUFFER="$1"  # Set the command into the Zsh command line buffer
-    CURSOR=${#BUFFER}  # Move the cursor to the end of the buffer
-    zle reset-prompt  # Clear the screen and reset the command prompt
-  else
-    # If not in an interactive shell, simulate executing the command
-    print -z "$1"
-  fi
-}
+  fzf-src() {
+    local destination
+    destination=$(ghq list -p | fzf --query="$LBUFFER") || return
+    [[ -n "$destination" ]] || return
+    BUFFER="cd -- ${(q)destination}"
+    zle accept-line
+  }
+  zle -N fzf-src
 
-# Improved SSH function with dynamic tmux window renaming
-ssh() {
-  if [[ -n $TMUX ]]; then
-    local window_name=$(tmux display -p '#{window_name}')
-    tmux rename-window -- "${@: -1}"
-    command ssh "$@"
-    tmux rename-window "$window_name"
-  else
-    command ssh "$@"
-  fi
-}
+  fzf-z-search() {
+    local destination
+    destination=$(zoxide query -l | fzf --query="$LBUFFER") || return
+    [[ -n "$destination" ]] || return
+    BUFFER="cd -- ${(q)destination}"
+    zle accept-line
+  }
+  zle -N fzf-z-search
 
-# Update X11 forwarding based on session type
-update-x11-forwarding() {
-  if [ -z "$STY" ] && [ -z "$TMUX" ]; then
-    echo $DISPLAY > ~/.display.txt
-  elif [ -f ~/.display.txt ]; then
-    export DISPLAY=$(<~/.display.txt)
-  fi
-}
-
-autoload -Uz add-zsh-hook
-add-zsh-hook preexec update-x11-forwarding
-
-# Search directories with enhanced sorting using fzf
-fzf-z-search() {
-  if command_exists zoxide; then
-    local entries
-    entries=$(zoxide query -l 2>/dev/null)
-    if [ -z "$entries" ]; then
-      zle -M "zoxide database is empty"
-      zle reset-prompt
-      return
-    fi
-
-    local result=$(print -r -- "$entries" | fzf --query="$LBUFFER" --height 40% --reverse)
-    if [ -n "$result" ]; then
-        BUFFER="cd '$result'"
-        zle accept-line
+  fp() {
+    if command -v bat >/dev/null 2>&1; then
+      fzf --preview 'bat --style=numbers --color=always --line-range :500 -- {}' "$@"
+    elif command -v batcat >/dev/null 2>&1; then
+      fzf --preview 'batcat --style=numbers --color=always --line-range :500 -- {}' "$@"
     else
-        zle reset-prompt
+      fzf "$@"
     fi
-  else
-    echo "zoxide not found."
-  fi
-}
-zle -N fzf-z-search
-bindkey '^f' fzf-z-search
-
-export FZF_DEFAULT_COMMAND='rg --files --hidden --glob "!.git"'
-export FZF_DEFAULT_OPTS='--height 40% --reverse --border'
+  }
+  vf() {
+    local file
+    file=$(fp) || return
+    [[ -n "$file" ]] && nvim -- "$file"
+  }
+  ff() {
+    command find . -type d -print | fzf "$@"
+  }
+fi
